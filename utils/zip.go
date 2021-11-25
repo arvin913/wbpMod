@@ -10,16 +10,17 @@ import (
 	"strings"
 )
 
+var DeCompressDir string
 //压缩文件
 //files 文件数组，可以是不同dir下的文件或者文件夹
 //dest 压缩文件存放地址
-func Compress(dirname string,files []*os.File, dest string) error {
+func Compress(dirname string, files []*os.File, dest string) error {
 	d, _ := os.Create(dest)
 	defer d.Close()
 	w := zip.NewWriter(d)
 	defer w.Close()
 	for _, file := range files {
-		err := compress(dirname,file, "", w)
+		err := compress(dirname, file, "", w)
 		if err != nil {
 			return err
 		}
@@ -27,7 +28,7 @@ func Compress(dirname string,files []*os.File, dest string) error {
 	return nil
 }
 
-func compress(dirname string,file *os.File, prefix string, zw *zip.Writer) error {
+func compress(dirname string, file *os.File, prefix string, zw *zip.Writer) error {
 	info, err := file.Stat()
 	//fmt.Println(info.Name())
 	if err != nil {
@@ -45,7 +46,7 @@ func compress(dirname string,file *os.File, prefix string, zw *zip.Writer) error
 			if err != nil {
 				return err
 			}
-			err = compress(dirname,f, prefix, zw)
+			err = compress(dirname, f, prefix, zw)
 			if err != nil {
 				return err
 			}
@@ -54,11 +55,12 @@ func compress(dirname string,file *os.File, prefix string, zw *zip.Writer) error
 		header, err := zip.FileInfoHeader(info)
 
 		//去除压缩包内文件夹
-		header.Name = strings.Replace(prefix + "/" + header.Name,"/"+dirname,"",1)
-		if strings.Count(header.Name,"/")>0{
-			header.Name=header.Name[1:len(header.Name)]
+		header.Name = strings.Replace(prefix+"/"+header.Name, "/"+dirname, "", 1)
+		if strings.Count(header.Name, "/") > 0 {
+			header.Name = header.Name[1:len(header.Name)]
 		}
 		header.Method = zip.Deflate
+		//header.Modified = info.ModTime().Add(-10*time.Hour)//不改变文件修改时间
 		//fmt.Println("header.Name:" + header.Name)
 		if err != nil {
 			return err
@@ -113,7 +115,7 @@ func DeCompress(zipFile, dest string) (err error) {
 		if err != nil {
 			return err
 		}
-		defer rc.Close()
+		//defer rc.Close()
 
 		filename := dest + "/" + file.Name
 		//err = os.MkdirAll(getDir(filename), 0755)
@@ -122,17 +124,21 @@ func DeCompress(zipFile, dest string) (err error) {
 		//}
 
 		w, err := os.Create(filename)
+
+		//err=os.Chtimes(filename,file.Modified,file.Modified)
 		if err != nil {
 			return err
 		}
-		defer w.Close()
+		//defer w.Close()
 
 		_, err = io.Copy(w, rc)
 		if err != nil {
 			return err
 		}
-		//w.Close()
-		//rc.Close()
+		w.Close()
+		rc.Close()
+		//文件原始修改时间
+		err=os.Chtimes(GetFileDir(zipFile) + "/"+filename,file.Modified,file.Modified)
 	}
 	return
 }
@@ -169,17 +175,17 @@ func CompressZip(src string, dest string) (err error) {
 	defer fzip.Close()
 	defer w.Close()
 	for _, file := range f {
-			fw, _ := w.Create(file.Name())
-			fileContent, err := ioutil.ReadFile(src + file.Name())
-			if err != nil {
-				log.Println(err)
-			}
-			_, err = fw.Write(fileContent)
-
-			if err != nil {
-				log.Println(err)
-			}
+		fw, _ := w.Create(file.Name())
+		fileContent, err := ioutil.ReadFile(src + file.Name())
+		if err != nil {
+			log.Println(err)
 		}
+		_, err = fw.Write(fileContent)
+
+		if err != nil {
+			log.Println(err)
+		}
+	}
 	return
 }
 
@@ -202,11 +208,10 @@ func Zip(deCompressDir, currentDir, dirName, fileName string, isZipFinished chan
 	isZipFinished <- true
 }
 
-
-func Unzip(wbpFile,dirName string,isUnzipFinished chan<- bool){
+func Unzip(wbpFile, dirName string, isUnzipFinished chan<- bool) {
 	deCompressErr := DeCompress(wbpFile, dirName)
 	if deCompressErr != nil {
 		fmt.Println(deCompressErr)
 	}
-	isUnzipFinished<- true
+	isUnzipFinished <- true
 }

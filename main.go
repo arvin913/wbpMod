@@ -8,7 +8,7 @@ import (
 	"wbpMod/utils"
 )
 
-const version string = "1.02"
+const version string = "1.03"
 
 func main() {
 	if len(os.Args) < 2 {
